@@ -5,8 +5,16 @@ import {
   generateQuestionForSlot,
   judgeQuestion,
   mockQuestions,
-  useMockLlm,
+  useMockLlm
 } from "./llm.js";
+
+export const PIPELINE_STEP_IDS = [
+  "parse",
+  "extract_claims",
+  "plan_slots",
+  "generate_questions",
+  "judge_questions",
+];
 
 const SLOTS = [
   { slot: "theory_mcq_1", type: "theory_mcq" },
@@ -42,13 +50,7 @@ function pickClaimsForSlots(claims, codeBlocks) {
 }
 
 export async function runGenerationPipeline({ markdown, onStep }) {
-  const steps = [
-    "parse",
-    "extract_claims",
-    "plan_slots",
-    "generate_questions",
-    "judge_questions",
-  ];
+  const steps = [...PIPELINE_STEP_IDS];
 
   const stepState = steps.map((name) => ({ name, status: "pending", message: "" }));
 
@@ -77,9 +79,18 @@ export async function runGenerationPipeline({ markdown, onStep }) {
   updateStep("extract_claims", "running");
   let claims = await extractTeachableClaims(parsed);
   claims = filterGroundedClaims(claims, parsed.fullText);
+  if (claims.length < 1) {
+    updateStep(
+      "extract_claims",
+      "error",
+      "No quotes matched the source — AI may have paraphrased or quoted tables. Use OpenRouter/Gemini live mode, not mock."
+    );
+    throw new Error(
+      "No grounded claims after quote validation. Ensure MOCK_LLM=false and a valid API key. Avoid quoting only from tables; the AI must copy exact sentences from your text."
+    );
+  }
   if (claims.length < 3) {
-    updateStep("extract_claims", "error", "Not enough grounded claims after quote validation.");
-    throw new Error("Fewer than 3 grounded claims after quote validation.");
+    console.warn(`[pipeline] Only ${claims.length} grounded claims (continuing anyway)`);
   }
   updateStep("extract_claims", "done", `${claims.length} grounded claims`);
 

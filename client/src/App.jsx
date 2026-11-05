@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { createRun, listRuns } from "./api/client.js";
+import { getRun, listRuns, startRun } from "./api/client.js";
+import GenerationProgress from "./components/GenerationProgress.jsx";
 import ReviewPage from "./pages/ReviewPage.jsx";
 
 const SAMPLE_HINT = "Paste markdown reading material here — use ## headings and ``` code fences where needed.";
@@ -12,10 +13,47 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [recentRuns, setRecentRuns] = useState([]);
+  const [activeRunId, setActiveRunId] = useState(null);
+  const [pipelineSteps, setPipelineSteps] = useState([]);
+  const [uploadName, setUploadName] = useState("");
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     listRuns().then(setRecentRuns).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!activeRunId || !loading) return undefined;
+
+    let cancelled = false;
+
+    const poll = async () => {
+      try {
+        const run = await getRun(activeRunId);
+        if (cancelled) return;
+        setPipelineSteps(run.pipelineSteps || []);
+
+        if (run.status === "ready_for_review") {
+          setLoading(false);
+          setActiveRunId(null);
+          navigate(`/review/${activeRunId}`);
+        } else if (run.status === "failed") {
+          setLoading(false);
+          setActiveRunId(null);
+          setError(run.errorMessage || "Generation failed");
+        }
+      } catch {
+        /* keep polling */
+      }
+    };
+
+    poll();
+    const timer = setInterval(poll, 500);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [activeRunId, loading, navigate]);
 
   if (runId) {
     return <ReviewPage runId={runId} />;
@@ -25,12 +63,13 @@ export default function App() {
     e.preventDefault();
     setError("");
     setLoading(true);
+    setPipelineSteps([]);
     try {
-      const run = await createRun(markdown);
-      navigate(`/review/${run._id}`);
+      const started = await startRun(markdown);
+      setActiveRunId(started._id);
+      setPipelineSteps(started.pipelineSteps || []);
     } catch (err) {
       setError(err.message);
-    } finally {
       setLoading(false);
     }
   }
@@ -41,9 +80,45 @@ export default function App() {
       const res = await fetch("/sample-reading-material.md");
       if (!res.ok) throw new Error("Sample not found");
       setMarkdown(await res.text());
+      setUploadName("sample-reading-material.md");
     } catch {
       setError("Paste content from sample-reading-material.md in the repo root.");
     }
+  }
+
+  function handleUploadClick() {
+    fileInputRef.current?.click();
+  }
+
+  function handleFileChange(e) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+
+    setError("");
+    const name = file.name.toLowerCase();
+    const okExt = name.endsWith(".md") || name.endsWith(".markdown") || name.endsWith(".txt");
+    if (!okExt) {
+      setError("Please upload a .md, .markdown, or .txt file.");
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setError("File is too large (max 2 MB).");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const text = String(reader.result ?? "");
+      if (text.trim().length < 50) {
+        setError("File is too short — need at least ~50 characters of content.");
+        return;
+      }
+      setMarkdown(text);
+      setUploadName(file.name);
+    };
+    reader.onerror = () => setError("Could not read that file.");
+    reader.readAsText(file);
   }
 
   const charCount = markdown.length;
@@ -66,23 +141,33 @@ export default function App() {
         </ul>
       </section>
 
-      <section className={`editor-panel ${loading ? "is-loading" : ""}`}>
-        {loading && (
-          <div className="editor-panel__overlay">
-            <div className="spinner" />
-            <p>Building your question set…</p>
-          </div>
-        )}
+      <section className="editor-panel">
         <div className="editor-panel__head">
-          <h2 className="panel-title">Reading input</h2>
+          <div>
+            <h2 className="panel-title">Reading input</h2>
+            {uploadName && <p className="upload-name">Loaded: {uploadName}</p>}
+          </div>
           <span className="char-count">{charCount.toLocaleString()} characters</span>
         </div>
         <form onSubmit={handleGenerate}>
+          <input
+            ref={fileInputRef}
+            type="file"
+            className="file-input-hidden"
+            accept=".md,.markdown,.txt,text/markdown,text/plain"
+            onChange={handleFileChange}
+            disabled={loading}
+            aria-hidden
+            tabIndex={-1}
+          />
           <div className="editor-wrap">
             <textarea
               className="editor"
               value={markdown}
-              onChange={(e) => setMarkdown(e.target.value)}
+              onChange={(e) => {
+                setMarkdown(e.target.value);
+                if (uploadName) setUploadName("");
+              }}
               placeholder={SAMPLE_HINT}
               required
               disabled={loading}
@@ -95,6 +180,9 @@ export default function App() {
             </div>
           )}
           <div className="editor-panel__actions">
+            <button type="button" className="btn btn--secondary" onClick={handleUploadClick} disabled={loading}>
+              Upload .md file
+            </button>
             <button type="button" className="btn btn--ghost" onClick={loadSample} disabled={loading}>
               Load sample lesson
             </button>
@@ -103,13 +191,21 @@ export default function App() {
               className="btn btn--primary"
               disabled={loading || markdown.trim().length < 50}
             >
-              Generate questions
-              <span className="btn__arrow" aria-hidden>
-                →
-              </span>
+              {loading ? "Generating…" : "Generate questions"}
+              {!loading && (
+                <span className="btn__arrow" aria-hidden>
+                  →
+                </span>
+              )}
             </button>
           </div>
         </form>
+
+        {loading && pipelineSteps.length > 0 && (
+          <div className="editor-panel__progress">
+            <GenerationProgress steps={pipelineSteps} />
+          </div>
+        )}
       </section>
 
       {recentRuns.length > 0 && (

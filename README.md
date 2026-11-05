@@ -47,7 +47,7 @@ cp .env.example server/.env
 npm run dev
 ```
 
-Open **http://localhost:5173** → paste or load sample → **Generate questions** → review each tab → **Export XML**.
+Open **http://localhost:5173** → paste, **upload a .md file**, or load sample → **Generate questions** → review each tab → **Export XML**.
 
 
 ---
@@ -61,8 +61,13 @@ Open **http://localhost:5173** → paste or load sample → **Generate questions
 | `PORT` | API port (default `5001`) |
 | `CLIENT_ORIGIN` | CORS origin (default `http://localhost:5173`) |
 | `MOCK_LLM` | `true` = no API calls (demo; best with sample lesson only) |
-| `LLM_PROVIDER` | `gemini` or `openai` (default: gemini if `GEMINI_API_KEY` is set) |
-| `GEMINI_API_KEY` | From [Google AI Studio](https://aistudio.google.com/apikey) |
+| `LLM_PROVIDER` | `openrouter`, `gemini`, or `openai` |
+| `OPENROUTER_API_KEY` | From [OpenRouter Keys](https://openrouter.ai/keys) |
+| `OPENROUTER_MODEL` | e.g. `google/gemini-2.0-flash-001` (see openrouter.ai/models) |
+| `OPENROUTER_FALLBACK_MODEL` | Used if primary model errors (503/429) |
+| `OPENROUTER_SITE_URL` | Optional; sent as `HTTP-Referer` |
+| `OPENROUTER_APP_NAME` | Optional; sent as `X-Title` |
+| `GEMINI_API_KEY` | Direct Google AI Studio key |
 | `GEMINI_MODEL` | Default `gemini-2.0-flash` |
 | `OPENAI_API_KEY` | Optional if using OpenAI instead |
 | `OPENAI_MODEL` | Default `gpt-4o-mini` |

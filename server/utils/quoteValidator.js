@@ -1,4 +1,4 @@
-import { findQuoteInSource } from "./parseMarkdown.js";
+import { findQuoteInSource, normalizeForMatch } from "./parseMarkdown.js";
 
 function isGroundedQuote(quote, fullText) {
   if (findQuoteInSource(quote, fullText)) return true;
@@ -18,4 +18,16 @@ export function validateQuestionQuotes(questions, fullText) {
     ...q,
     grounded: isGroundedQuote(q.supportingQuote, fullText),
   }));
+}
+
+/** For debugging failed runs — why claims were dropped */
+export function diagnoseClaimRejection(quote, fullText) {
+  const nQuote = normalizeForMatch(quote);
+  const nSource = normalizeForMatch(fullText);
+  return {
+    exact: fullText.includes(quote?.trim()),
+    normalizedIncluded: nQuote.length >= 12 && nSource.includes(nQuote),
+    anchorIncluded:
+      nQuote.length >= 28 && nSource.includes(nQuote.slice(0, 28)),
+  };
 }

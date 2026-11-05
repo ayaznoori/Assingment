@@ -31,11 +31,27 @@ export function getRun(id) {
   return request(`/api/runs/${id}`);
 }
 
-export function createRun(markdown) {
-  return request("/api/runs", {
+/** Starts async generation; returns immediately with run id (HTTP 202). */
+export async function startRun(markdown) {
+  const res = await fetch(`${BASE}/api/runs`, {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ markdown }),
   });
+  const text = await res.text();
+  let data;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = null;
+  }
+  if (res.status !== 202 && !res.ok) {
+    throw new Error(data?.error || res.statusText);
+  }
+  if (!data?._id) {
+    throw new Error("Invalid server response");
+  }
+  return data;
 }
 
 export function updateQuestion(runId, questionId, payload) {

@@ -1,5 +1,20 @@
+/** Normalize text so quote-in-source checks tolerate minor markdown / unicode differences. */
+export function normalizeForMatch(text) {
+  return String(text ?? "")
+    .replace(/\*\*/g, "")
+    .replace(/`/g, "")
+    .replace(/[≥]/g, ">=")
+    .replace(/[≤]/g, "<=")
+    .replace(/→/g, "->")
+    .replace(/\u2019/g, "'")
+    .replace(/\u201c|\u201d/g, '"')
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
 /**
- * Split markdown into sections (by ## headings) and collect fenced code blocks.
+ * Split markdown into sections (by # or ## headings) and collect fenced code blocks.
  */
 export function parseMarkdown(markdown) {
   const lines = markdown.split(/\r?\n/);
@@ -37,7 +52,7 @@ export function parseMarkdown(markdown) {
       continue;
     }
 
-    const heading = line.match(/^##\s+(.+)/);
+    const heading = line.match(/^#{1,2}\s+(.+)/);
     if (heading) {
       if (current.bodyLines.length > 0 || sections.length === 0) {
         sections.push({
@@ -45,7 +60,7 @@ export function parseMarkdown(markdown) {
           body: current.bodyLines.join("\n").trim(),
         });
       }
-      current = { title: heading[1].trim(), bodyLines: [] };
+      current = { title: heading[1].replace(/^[0-9️⃣🔟📌\s]+/, "").trim(), bodyLines: [] };
       continue;
     }
 
@@ -64,13 +79,27 @@ export function parseMarkdown(markdown) {
   };
 }
 
+const MIN_ANCHOR_LEN = 28;
+
 export function findQuoteInSource(quote, fullText) {
   if (!quote || !fullText) return false;
   const normalizedQuote = quote.trim();
   if (fullText.includes(normalizedQuote)) return true;
+
   const collapsed = normalizedQuote.replace(/\s+/g, " ");
   const collapsedSource = fullText.replace(/\s+/g, " ");
-  return collapsedSource.includes(collapsed);
+  if (collapsedSource.includes(collapsed)) return true;
+
+  const nQuote = normalizeForMatch(normalizedQuote);
+  const nSource = normalizeForMatch(fullText);
+  if (nQuote.length >= 12 && nSource.includes(nQuote)) return true;
+
+  if (nQuote.length >= MIN_ANCHOR_LEN) {
+    const anchor = nQuote.slice(0, MIN_ANCHOR_LEN);
+    if (nSource.includes(anchor)) return true;
+  }
+
+  return false;
 }
 
 export function excerptAroundQuote(fullText, quote, radius = 120) {

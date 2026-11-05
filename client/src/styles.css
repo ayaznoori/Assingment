@@ -267,6 +267,21 @@ h3 {
   font-variant-numeric: tabular-nums;
 }
 
+.upload-name {
+  margin: 0.25rem 0 0;
+  font-size: 0.8rem;
+  color: var(--teal);
+  font-weight: 600;
+}
+
+.file-input-hidden {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
 .editor-wrap {
   padding: 0.75rem 1rem 0;
 }
@@ -300,23 +315,126 @@ h3 {
   padding: 1rem 1.25rem 1.25rem;
 }
 
-.editor-panel__overlay {
-  position: absolute;
-  inset: 0;
-  z-index: 10;
-  background: rgba(255, 255, 255, 0.88);
-  backdrop-filter: blur(4px);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 1rem;
+.editor-panel__progress {
+  border-top: 1px solid var(--border);
+  padding: 1.15rem 1.25rem 1.35rem;
+  background: linear-gradient(180deg, #fafafa, var(--surface));
 }
 
-.editor-panel__overlay p {
-  margin: 0;
+.gen-progress__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.55rem;
+}
+
+.gen-progress__title {
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-muted);
+}
+
+.gen-progress__pct {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}
+
+.gen-progress__bar {
+  height: 8px;
+  background: var(--paper-deep);
+  border-radius: 999px;
+  overflow: hidden;
+  margin-bottom: 0.65rem;
+}
+
+.gen-progress__fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--teal));
+  border-radius: 999px;
+  transition: width 0.45s ease;
+}
+
+.gen-progress__current {
+  margin: 0 0 0.75rem;
+  font-size: 0.9rem;
   font-weight: 600;
   color: var(--ink-secondary);
+}
+
+.gen-progress__steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.gen-step {
+  display: grid;
+  grid-template-columns: 1.5rem 1fr;
+  gap: 0.5rem;
+  align-items: start;
+  font-size: 0.88rem;
+}
+
+.gen-step__icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  display: grid;
+  place-items: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--ink-faint);
+}
+
+.gen-step--running .gen-step__icon {
+  color: var(--accent);
+}
+
+.gen-step--done .gen-step__icon {
+  color: var(--teal);
+}
+
+.gen-step--error .gen-step__icon {
+  color: var(--red);
+}
+
+.gen-step__text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.gen-step__text strong {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.gen-step--pending .gen-step__text strong {
+  color: var(--ink-muted);
+}
+
+.gen-step__text em {
+  font-style: normal;
+  font-size: 0.78rem;
+  color: var(--ink-muted);
+}
+
+.gen-progress__fail {
+  margin: 0.75rem 0 0;
+  font-size: 0.85rem;
+  color: var(--red);
+  font-weight: 600;
+}
+
+.spinner--sm {
+  width: 14px;
+  height: 14px;
+  border-width: 2px;
 }
 
 .section-title {

@@ -1,9 +1,52 @@
 import { Router } from "express";
 import { Run } from "../models/Run.js";
-import { runGenerationPipeline } from "../services/pipeline.js";
+import { runGenerationPipeline, PIPELINE_STEP_IDS } from "../services/pipeline.js";
 import { buildTaggedExport } from "../services/export.js";
 
 const router = Router();
+
+function initialPipelineSteps() {
+  return PIPELINE_STEP_IDS.map((name) => ({
+    name,
+    status: "pending",
+    message: "",
+  }));
+}
+
+async function processRunInBackground(runId, markdown) {
+  const run = await Run.findById(runId);
+  if (!run) return;
+
+  let saveChain = Promise.resolve();
+  const queueSave = () => {
+    saveChain = saveChain.then(() => run.save());
+    return saveChain;
+  };
+
+  try {
+    const result = await runGenerationPipeline({
+      markdown,
+      onStep: async (steps) => {
+        run.pipelineSteps = steps;
+        await queueSave();
+      },
+    });
+
+    await saveChain;
+    run.title = result.title;
+    run.pipelineSteps = result.pipelineSteps;
+    run.teachableClaims = result.teachableClaims;
+    run.questions = result.questions;
+    run.status = result.status;
+    run.errorMessage = "";
+    await run.save();
+  } catch (e) {
+    await saveChain.catch(() => {});
+    run.status = "failed";
+    run.errorMessage = e.message;
+    await run.save();
+  }
+}
 
 router.get("/", async (_req, res) => {
   const runs = await Run.find().sort({ createdAt: -1 }).select("-sourceMarkdown").limit(20);
@@ -25,28 +68,17 @@ router.post("/", async (req, res) => {
   const run = await Run.create({
     sourceMarkdown: markdown,
     status: "processing",
-    pipelineSteps: [],
+    pipelineSteps: initialPipelineSteps(),
     questions: [],
   });
 
-  try {
-    const result = await runGenerationPipeline({
-      markdown,
-    });
+  res.status(202).json({
+    _id: run._id,
+    status: run.status,
+    pipelineSteps: run.pipelineSteps,
+  });
 
-    run.title = result.title;
-    run.pipelineSteps = result.pipelineSteps;
-    run.teachableClaims = result.teachableClaims;
-    run.questions = result.questions;
-    run.status = result.status;
-    await run.save();
-    res.status(201).json(run);
-  } catch (e) {
-    run.status = "failed";
-    run.errorMessage = e.message;
-    await run.save();
-    res.status(500).json({ error: e.message, runId: run._id });
-  }
+  processRunInBackground(run._id, markdown);
 });
 
 router.patch("/:id/questions/:questionId", async (req, res) => {

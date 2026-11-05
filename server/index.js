@@ -70,7 +70,7 @@ async function start() {
   app.listen(PORT, () => {
     console.log(`[server] http://localhost:${PORT}`);
     if (llm.mode === "mock") {
-      console.log("[server] Mock LLM — set GEMINI_API_KEY or OPENAI_API_KEY for live generation");
+      console.log("[server] Mock LLM — set OPENROUTER_API_KEY, GEMINI_API_KEY, or OPENAI_API_KEY");
     } else {
       console.log(`[server] Live LLM: ${llm.provider}`);
     }
