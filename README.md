@@ -1,7 +1,6 @@
 # Reading Material → Question Review Workflow
 
-MERN app for the **NxtWave — Fullstack Developer & AI Instructor** assignment (Part A).
-
+MERN app for the **Fullstack Developer & AI Instructor**.
 It takes markdown reading material, runs a grounded question-generation pipeline, lets a **human reviewer** approve / edit / reject each item, and exports **one question group** in tagged XML:
 
 | Slot | Type |
@@ -50,7 +49,6 @@ npm run dev
 
 Open **http://localhost:5173** → paste or load sample → **Generate questions** → review each tab → **Export XML**.
 
-The five-step generation pipeline (parse, claims, plan, generate, judge) runs on the server only; see **README** and **Interview.md** for internals — it is not shown in the UI.
 
 ---
 
@@ -85,7 +83,6 @@ If `MOCK_LLM` is not `true` and **both** keys are empty, the server uses **mock*
 │   │   └── export.js       # Tagged XML export
 │   └── utils/              # Markdown parse + quote checks
 ├── sample-reading-material.md
-├── Interview.md            # Recording + interview prep
 └── docker-compose.yml      # Local MongoDB
 ```
 
@@ -155,8 +152,6 @@ npm run start          # server only
 - [x] Reviewer UI: judge quality, edit, approve/reject  
 - [x] React frontend + Node/Express backend + MongoDB  
 - [x] Grounding: quote substring validation + judge step  
-
-Part B: see **`Interview.md`** for recording script and talking points.
 
 ---
 
