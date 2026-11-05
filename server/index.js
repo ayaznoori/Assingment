@@ -5,6 +5,7 @@ import express from "express";
 import cors from "cors";
 import mongoose from "mongoose";
 import runsRouter from "./routes/runs.js";
+import { llmStatusForHealth } from "./services/llmConfig.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, ".env") });
@@ -23,9 +24,11 @@ app.use(
 app.use(express.json({ limit: "2mb" }));
 
 app.get("/api/health", (_req, res) => {
+  const llm = llmStatusForHealth();
   res.json({
     ok: true,
-    mockLlm: process.env.MOCK_LLM === "true" || !process.env.OPENAI_API_KEY,
+    mockLlm: llm.mode === "mock",
+    llmProvider: llm.provider,
     mongo: mongoose.connection.readyState === 1,
   });
 });
@@ -63,10 +66,13 @@ async function start() {
     process.exit(1);
   }
 
+  const llm = llmStatusForHealth();
   app.listen(PORT, () => {
     console.log(`[server] http://localhost:${PORT}`);
-    if (process.env.MOCK_LLM === "true" || !process.env.OPENAI_API_KEY) {
-      console.log("[server] MOCK / no API key — deterministic sample questions");
+    if (llm.mode === "mock") {
+      console.log("[server] Mock LLM — set GEMINI_API_KEY or OPENAI_API_KEY for live generation");
+    } else {
+      console.log(`[server] Live LLM: ${llm.provider}`);
     }
   });
 }

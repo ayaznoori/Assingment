@@ -1,3 +1,5 @@
+import { resolveLlmProvider, useMockLlm } from "./llmConfig.js";
+
 const MOCK_CLAIMS = [
   {
     claim: "A closure is when a function remembers variables from where it was created.",
@@ -128,9 +130,9 @@ function quoteInText(fullText, quote) {
 
 export async function extractTeachableClaims(parsed) {
   const { fullText, sections } = parsed;
-  if (process.env.MOCK_LLM === "true" || !process.env.OPENAI_API_KEY) {
-    if (process.env.MOCK_LLM !== "true" && !process.env.OPENAI_API_KEY) {
-      console.warn("[llm] No OPENAI_API_KEY — using mock claims for this run.");
+  if (useMockLlm()) {
+    if (process.env.MOCK_LLM !== "true") {
+      console.warn("[llm] No API key — using mock claims. Set GEMINI_API_KEY or OPENAI_API_KEY.");
     }
     return MOCK_CLAIMS.filter((c) => quoteInText(fullText, c.supportingQuote));
   }
@@ -148,7 +150,7 @@ export async function extractTeachableClaims(parsed) {
 }
 
 export async function generateQuestionForSlot({ slot, type, claim, codeBlocks, fullText }) {
-  if (process.env.MOCK_LLM === "true" || !process.env.OPENAI_API_KEY) {
+  if (useMockLlm()) {
     const all = mockQuestions(codeBlocks);
     return all.find((q) => q.slot === slot);
   }
@@ -187,7 +189,7 @@ Type: ${type}. Slot: ${slot}. Do NOT test anything not in the quote.`;
 }
 
 export async function judgeQuestion({ question, fullText }) {
-  if (process.env.MOCK_LLM === "true" || !process.env.OPENAI_API_KEY) {
+  if (useMockLlm()) {
     const grounded = quoteInText(fullText, question.supportingQuote);
     return {
       pass: grounded,
@@ -210,6 +212,45 @@ ${fullText.slice(0, 4000)}`;
 }
 
 async function chatJson(system, user) {
+  const provider = resolveLlmProvider();
+  if (provider === "gemini") return chatJsonGemini(system, user);
+  if (provider === "openai") return chatJsonOpenAI(system, user);
+  throw new Error("No LLM provider configured");
+}
+
+async function chatJsonGemini(system, user) {
+  const key = process.env.GEMINI_API_KEY.trim();
+  const model = process.env.GEMINI_MODEL || "gemini-2.0-flash";
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: system }] },
+      contents: [{ role: "user", parts: [{ text: user }] }],
+      generationConfig: {
+        temperature: 0.2,
+        responseMimeType: "application/json",
+      },
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Gemini error ${res.status}: ${err}`);
+  }
+
+  const data = await res.json();
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) {
+    const block = data.candidates?.[0]?.finishReason || data.promptFeedback;
+    throw new Error(`Empty Gemini response: ${JSON.stringify(block)}`);
+  }
+  return JSON.parse(text);
+}
+
+async function chatJsonOpenAI(system, user) {
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -238,4 +279,4 @@ async function chatJson(system, user) {
   return JSON.parse(content);
 }
 
-export { mockQuestions };
+export { mockQuestions, useMockLlm };

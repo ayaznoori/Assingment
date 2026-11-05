@@ -5,6 +5,7 @@ import {
   generateQuestionForSlot,
   judgeQuestion,
   mockQuestions,
+  useMockLlm,
 } from "./llm.js";
 
 const SLOTS = [
@@ -89,7 +90,7 @@ export async function runGenerationPipeline({ markdown, onStep }) {
   updateStep("generate_questions", "running");
   let questions = [];
 
-  const useMock = process.env.MOCK_LLM === "true" || !process.env.OPENAI_API_KEY;
+  const useMock = useMockLlm();
   if (useMock) {
     questions = mockQuestions(parsed.codeBlocks);
   } else {

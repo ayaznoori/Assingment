@@ -1,7 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { exportRun, getRun, updateQuestion } from "../api/client.js";
-import PipelineSteps from "../components/PipelineSteps.jsx";
+import ApprovalProgress from "../components/ApprovalProgress.jsx";
+
+const SLOT_LABELS = {
+  theory_mcq_1: "MCQ 1",
+  theory_mcq_2: "MCQ 2",
+  true_false_1: "True / False 1",
+  true_false_2: "True / False 2",
+  code_analysis: "Code analysis",
+};
 
 function highlightQuote(source, quote) {
   if (!quote || !source) return source;
@@ -13,7 +21,7 @@ function highlightQuote(source, quote) {
     return (
       <>
         {source.slice(0, idx2)}
-        <mark>{source.slice(idx2, idx2 + short.length)}</mark>
+        <mark className="quote-highlight">{source.slice(idx2, idx2 + short.length)}</mark>
         {source.slice(idx2 + short.length)}
       </>
     );
@@ -21,7 +29,7 @@ function highlightQuote(source, quote) {
   return (
     <>
       {source.slice(0, idx)}
-      <mark>{source.slice(idx, idx + quote.trim().length)}</mark>
+      <mark className="quote-highlight">{source.slice(idx, idx + quote.trim().length)}</mark>
       {source.slice(idx + quote.trim().length)}
     </>
   );
@@ -33,14 +41,13 @@ export default function ReviewPage({ runId }) {
   const [exportXml, setExportXml] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const load = useCallback(async () => {
     const data = await getRun(runId);
     setRun(data);
-    if (!selectedId && data.questions?.[0]) {
-      setSelectedId(data.questions[0]._id);
-    }
-  }, [runId, selectedId]);
+    setSelectedId((prev) => prev || data.questions?.[0]?._id);
+  }, [runId]);
 
   useEffect(() => {
     load().catch((e) => setError(e.message));
@@ -51,11 +58,11 @@ export default function ReviewPage({ runId }) {
     [run, selectedId]
   );
 
-  async function patchQuestion(payload) {
+  async function patchQuestion(questionId, payload) {
     setSaving(true);
     setError("");
     try {
-      await updateQuestion(runId, selectedId, payload);
+      await updateQuestion(runId, questionId, payload);
       await load();
     } catch (e) {
       setError(e.message);
@@ -66,18 +73,33 @@ export default function ReviewPage({ runId }) {
 
   async function handleExport() {
     setError("");
+    setExporting(true);
     try {
       const xml = await exportRun(runId);
       setExportXml(xml);
     } catch (e) {
       setError(e.message);
+    } finally {
+      setExporting(false);
     }
+  }
+
+  function downloadXml() {
+    if (!exportXml) return;
+    const blob = new Blob([exportXml], { type: "application/xml" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `questions-${runId}.xml`;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   if (!run) {
     return (
-      <div className="layout">
-        <p>{error || "Loading run…"}</p>
+      <div className="page page--centered">
+        <div className="spinner spinner--lg" />
+        <p className="muted">{error || "Loading session…"}</p>
       </div>
     );
   }
@@ -87,88 +109,92 @@ export default function ReviewPage({ runId }) {
   ).length;
 
   return (
-    <div className="layout">
-      <header className="header">
-        <div>
-          <Link to="/" className="back">
-            ← New run
+    <div className="page page--review">
+      <header className="review-header">
+        <div className="review-header__intro">
+          <Link to="/" className="text-link">
+            ← Back
           </Link>
-          <h1>{run.title}</h1>
-          <p className="muted">
-            Status: {run.status} · Approved {approvedCount}/5
-          </p>
+          <h1 className="review-header__title">{run.title}</h1>
         </div>
-        <button type="button" onClick={handleExport} disabled={approvedCount < 5}>
-          Export tagged XML
+        <button
+          type="button"
+          className="btn btn--primary btn--export"
+          onClick={handleExport}
+          disabled={approvedCount < 5 || exporting}
+        >
+          {exporting ? "Exporting…" : "Export XML"}
         </button>
       </header>
 
-      {run.pipelineSteps?.length > 0 && (
-        <section className="card compact">
-          <PipelineSteps steps={run.pipelineSteps} />
-        </section>
+      <ApprovalProgress
+        questions={run.questions}
+        selectedId={selectedId}
+        onSelect={setSelectedId}
+      />
+
+      {error && (
+        <div className="alert alert--error" role="alert">
+          {error}
+        </div>
       )}
 
-      {error && <p className="error">{error}</p>}
-
-      <div className="review-grid">
-        <section className="card source-pane">
-          <h2>Source material</h2>
-          {selected && (
-            <p className="muted">
-              Highlight: quote for <strong>{selected.slot}</strong>
-            </p>
-          )}
-          <pre className="source-text">
-            {selected
-              ? highlightQuote(run.sourceMarkdown, selected.supportingQuote)
-              : run.sourceMarkdown}
-          </pre>
-        </section>
-
-        <section className="card questions-pane">
-          <h2>Reviewer</h2>
-          <div className="q-tabs">
-            {run.questions.map((q) => (
-              <button
-                key={q._id}
-                type="button"
-                className={`q-tab ${selectedId === q._id ? "active" : ""} ${q.grounded ? "" : "warn"}`}
-                onClick={() => setSelectedId(q._id)}
-              >
-                {q.slot.replace(/_/g, " ")}
-              </button>
-            ))}
+      <div className="review-split">
+        <aside className="source-panel">
+          <div className="source-panel__head">
+            <h2 className="panel-title">Source material</h2>
+            {selected && (
+              <span className="source-panel__chip">{SLOT_LABELS[selected.slot]}</span>
+            )}
           </div>
+          <div className="source-panel__body">
+            <pre className="source-doc">
+              {selected
+                ? highlightQuote(run.sourceMarkdown, selected.supportingQuote)
+                : run.sourceMarkdown}
+            </pre>
+          </div>
+        </aside>
 
+        <main className="review-panel">
           {selected && (
             <QuestionEditor
+              key={selected._id}
+              label={SLOT_LABELS[selected.slot]}
               question={selected}
               saving={saving}
-              onApprove={() => patchQuestion({ reviewerStatus: "approved" })}
-              onReject={() => patchQuestion({ reviewerStatus: "rejected" })}
+              onApprove={() => patchQuestion(selected._id, { reviewerStatus: "approved" })}
+              onReject={() => patchQuestion(selected._id, { reviewerStatus: "rejected" })}
               onSaveEdits={(edits) =>
-                patchQuestion({
+                patchQuestion(selected._id, {
                   reviewerStatus: "edited",
                   ...edits,
                 })
               }
             />
           )}
-        </section>
+        </main>
       </div>
 
       {exportXml && (
-        <section className="card">
-          <h2>Exported XML</h2>
-          <pre className="export-xml">{exportXml}</pre>
+        <section className="export-panel">
+          <div className="export-panel__head">
+            <div>
+              <h2 className="panel-title">Export package</h2>
+              <p className="muted">Tagged XML ready for your CMS or content pipeline.</p>
+            </div>
+            <button type="button" className="btn btn--secondary" onClick={downloadXml}>
+              Download file
+            </button>
+          </div>
+          <pre className="code-preview">{exportXml}</pre>
         </section>
       )}
     </div>
   );
 }
 
-function QuestionEditor({ question, onApprove, onReject, onSaveEdits, saving }) {
+function QuestionEditor({ label, question, onApprove, onReject, onSaveEdits, saving }) {
   const [stem, setStem] = useState(question.stem);
   const [explanation, setExplanation] = useState(question.explanation);
   const [correct, setCorrect] = useState(question.correctAnswer);
@@ -181,82 +207,113 @@ function QuestionEditor({ question, onApprove, onReject, onSaveEdits, saving }) 
     setOptions(question.options || []);
   }, [question]);
 
+  const typeLabel =
+    question.type === "theory_mcq"
+      ? "Multiple choice"
+      : question.type === "true_false"
+        ? "True or false"
+        : "Code analysis";
+
   return (
-    <div className="question-editor">
-      <div className="meta-row">
-        <span className="type-tag">{question.type}</span>
-        {!question.grounded && <span className="badge warn">Ungrounded — fix or reject</span>}
-        {question.judgeNotes && <span className="muted">{question.judgeNotes}</span>}
+    <div className="question-card">
+      <div className="question-card__head">
+        <div>
+          <span className="question-card__slot">{label}</span>
+          <span className="chip chip--type">{typeLabel}</span>
+        </div>
+        <div className="question-card__status">
+          {!question.grounded && <span className="chip chip--warn">Needs source check</span>}
+          {(question.reviewerStatus === "approved" || question.reviewerStatus === "edited") && (
+            <span className="chip chip--success">Approved</span>
+          )}
+          {question.reviewerStatus === "rejected" && <span className="chip chip--muted">Rejected</span>}
+        </div>
       </div>
 
-      <label>
-        Stem
-        <textarea value={stem} onChange={(e) => setStem(e.target.value)} rows={3} />
-      </label>
+      <div className="field">
+        <label className="field__label">Question stem</label>
+        <textarea
+          className="field__input field__input--tall"
+          value={stem}
+          onChange={(e) => setStem(e.target.value)}
+          rows={3}
+        />
+      </div>
 
       {question.codeSnippet && (
-        <label>
-          Code snippet
+        <div className="field">
+          <label className="field__label">Referenced code</label>
           <pre className="code-block">{question.codeSnippet}</pre>
-        </label>
+        </div>
       )}
 
-      <div className="options-edit">
-        <strong>Options</strong>
-        {options.map((opt, i) => (
-          <div key={opt.key} className="option-row">
-            <span>{opt.key}</span>
-            <input
-              value={opt.text}
-              onChange={(e) => {
-                const next = [...options];
-                next[i] = { ...opt, text: e.target.value };
-                setOptions(next);
-              }}
-            />
-          </div>
-        ))}
+      <div className="field">
+        <span className="field__label">Answer choices</span>
+        <div className="choice-list">
+          {options.map((opt, i) => (
+            <div key={opt.key} className={`choice-row ${correct === opt.key ? "choice-row--correct" : ""}`}>
+              <span className="choice-row__key">{opt.key}</span>
+              <input
+                className="field__input"
+                value={opt.text}
+                onChange={(e) => {
+                  const next = [...options];
+                  next[i] = { ...opt, text: e.target.value };
+                  setOptions(next);
+                }}
+              />
+            </div>
+          ))}
+        </div>
       </div>
 
-      <label>
-        Correct answer
-        <input value={correct} onChange={(e) => setCorrect(e.target.value)} />
-      </label>
+      <div className="field-grid">
+        <div className="field">
+          <label className="field__label">Correct answer</label>
+          <input className="field__input" value={correct} onChange={(e) => setCorrect(e.target.value)} />
+        </div>
+      </div>
 
-      <label>
-        Explanation
-        <textarea value={explanation} onChange={(e) => setExplanation(e.target.value)} rows={3} />
-      </label>
+      <div className="field">
+        <label className="field__label">Explanation</label>
+        <textarea
+          className="field__input field__input--tall"
+          value={explanation}
+          onChange={(e) => setExplanation(e.target.value)}
+          rows={3}
+        />
+      </div>
 
-      <label>
-        Supporting quote (must exist in material)
-        <textarea value={question.supportingQuote} readOnly rows={2} className="readonly" />
-      </label>
+      <div className="field">
+        <label className="field__label">Supporting quote</label>
+        <textarea className="field__input field__input--quote" value={question.supportingQuote} readOnly />
+      </div>
 
-      <div className="row">
-        <button type="button" className="secondary" disabled={saving} onClick={onReject}>
+      <div className="action-bar">
+        <button type="button" className="btn btn--danger-ghost" disabled={saving} onClick={onReject}>
           Reject
         </button>
-        <button
-          type="button"
-          className="secondary"
-          disabled={saving}
-          onClick={() =>
-            onSaveEdits({
-              editedStem: stem,
-              editedOptions: options,
-              editedCorrectAnswer: correct,
-              editedExplanation: explanation,
-            })
-          }
-        >
-          Save edits
-        </button>
-        <button type="button" disabled={saving} onClick={onApprove}>
-          Approve
-        </button>
+        <div className="action-bar__right">
+          <button
+            type="button"
+            className="btn btn--secondary"
+            disabled={saving}
+            onClick={() =>
+              onSaveEdits({
+                editedStem: stem,
+                editedOptions: options,
+                editedCorrectAnswer: correct,
+                editedExplanation: explanation,
+              })
+            }
+          >
+            Save changes
+          </button>
+          <button type="button" className="btn btn--primary" disabled={saving} onClick={onApprove}>
+            {saving ? "Saving…" : "Approve question"}
+          </button>
+        </div>
       </div>
-      <p className="muted">Status: {question.reviewerStatus}</p>
     </div>
   );
 }

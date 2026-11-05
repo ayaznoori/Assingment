@@ -21,7 +21,7 @@ It takes markdown reading material, runs a grounded question-generation pipeline
   - **Easiest:** `USE_IN_MEMORY_MONGO=true` in `server/.env` (default in `.env.example`; no Docker)
   - Docker: `docker compose up -d`
   - MongoDB Atlas connection string in `MONGODB_URI`
-- **Optional:** OpenAI API key for live generation (`MOCK_LLM=true` works without a key for demos)
+- **LLM:** **Google Gemini** (recommended) or OpenAI — or `MOCK_LLM=true` for demo without a key
 
 ---
 
@@ -40,21 +40,17 @@ cp .env.example server/.env
 # OR: docker compose up -d
 # OR: Atlas URI in MONGODB_URI and USE_IN_MEMORY_MONGO=false
 
-# 3) Configure LLM (optional)
+# 3) Configure LLM — copy example and add your Gemini key
+cp .env.example server/.env
+# Edit server/.env: GEMINI_API_KEY=... (https://aistudio.google.com/apikey)
+
+# 4) Run
 npm run dev
 ```
 
-Open **http://localhost:5173**
+Open **http://localhost:5173** → paste or load sample → **Generate questions** → review each tab → **Export XML**.
 
-- API health: **http://localhost:5001/api/health**
-- Frontend proxies `/api` → `5001` in dev (see `client/vite.config.js`)
-
-### Try the sample material
-
-1. Click **Try load sample (dev)** on the home page, or paste `sample-reading-material.md`.
-2. Click **Run pipeline** → review screen opens.
-3. For each of the 5 tabs: **Approve** (or **Save edits** then approve).
-4. Click **Export tagged XML** when **Approved 5/5**.
+The five-step generation pipeline (parse, claims, plan, generate, judge) runs on the server only; see **README** and **Interview.md** for internals — it is not shown in the UI.
 
 ---
 
@@ -66,11 +62,14 @@ Open **http://localhost:5173**
 | `MONGODB_URI` | Used when `USE_IN_MEMORY_MONGO` is not `true` |
 | `PORT` | API port (default `5001`) |
 | `CLIENT_ORIGIN` | CORS origin (default `http://localhost:5173`) |
-| `MOCK_LLM` | `true` = deterministic mock questions (no API key) |
-| `OPENAI_API_KEY` | Required when `MOCK_LLM` is not `true` |
+| `MOCK_LLM` | `true` = no API calls (demo; best with sample lesson only) |
+| `LLM_PROVIDER` | `gemini` or `openai` (default: gemini if `GEMINI_API_KEY` is set) |
+| `GEMINI_API_KEY` | From [Google AI Studio](https://aistudio.google.com/apikey) |
+| `GEMINI_MODEL` | Default `gemini-2.0-flash` |
+| `OPENAI_API_KEY` | Optional if using OpenAI instead |
 | `OPENAI_MODEL` | Default `gpt-4o-mini` |
 
-If `OPENAI_API_KEY` is empty, the server **automatically falls back to mock generation** (same as demo mode).
+If `MOCK_LLM` is not `true` and **both** keys are empty, the server uses **mock** generation.
 
 ---
 
@@ -82,7 +81,7 @@ If `OPENAI_API_KEY` is empty, the server **automatically falls back to mock gene
 │   ├── routes/runs.js      # REST API
 │   ├── services/
 │   │   ├── pipeline.js     # 5-step workflow
-│   │   ├── llm.js          # OpenAI + mock
+│   │   ├── llm.js          # Gemini / OpenAI + mock
 │   │   └── export.js       # Tagged XML export
 │   └── utils/              # Markdown parse + quote checks
 ├── sample-reading-material.md

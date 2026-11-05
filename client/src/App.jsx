@@ -1,10 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { createRun, getHealth, listRuns } from "./api/client.js";
-import PipelineSteps from "./components/PipelineSteps.jsx";
+import { createRun, listRuns } from "./api/client.js";
 import ReviewPage from "./pages/ReviewPage.jsx";
 
-const SAMPLE_HINT = "Paste markdown reading material, or load sample-reading-material.md from the repo.";
+const SAMPLE_HINT = "Paste markdown reading material here — use ## headings and ``` code fences where needed.";
 
 export default function App() {
   const { runId } = useParams();
@@ -12,12 +11,9 @@ export default function App() {
   const [markdown, setMarkdown] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [health, setHealth] = useState(null);
   const [recentRuns, setRecentRuns] = useState([]);
-  const [liveSteps, setLiveSteps] = useState([]);
 
   useEffect(() => {
-    getHealth().then(setHealth).catch(() => setHealth({ ok: false }));
     listRuns().then(setRecentRuns).catch(() => {});
   }, []);
 
@@ -29,7 +25,6 @@ export default function App() {
     e.preventDefault();
     setError("");
     setLoading(true);
-    setLiveSteps([]);
     try {
       const run = await createRun(markdown);
       navigate(`/review/${run._id}`);
@@ -44,83 +39,107 @@ export default function App() {
     setError("");
     try {
       const res = await fetch("/sample-reading-material.md");
-      if (!res.ok) throw new Error("Open sample-reading-material.md from repo root and paste it.");
+      if (!res.ok) throw new Error("Sample not found");
       setMarkdown(await res.text());
     } catch {
-      setError("Could not load sample file in dev — paste content from sample-reading-material.md");
+      setError("Paste content from sample-reading-material.md in the repo root.");
     }
   }
 
+  const charCount = markdown.length;
+
   return (
-    <div className="layout">
-      <header className="header">
-        <div>
-          <h1>Reading → Question Review Workflow</h1>
-          <p className="muted">
-            Generates one group: 2 theory MCQs, 2 true/false, 1 code-analysis — then human review & export.
-          </p>
-        </div>
-        {health && (
-          <div className="badges">
-            <span className={health.mongo ? "badge ok" : "badge warn"}>Mongo {health.mongo ? "OK" : "?"}</span>
-            <span className={health.mockLlm ? "badge" : "badge ok"}>
-              {health.mockLlm ? "Mock LLM" : "Live LLM"}
-            </span>
+    <div className="page page--home">
+      <section className="hero">
+        <p className="eyebrow">Reading material → assessment</p>
+        <h1 className="hero__title">
+          Turn lessons into <span className="hero__accent">review-ready</span> questions
+        </h1>
+        <p className="hero__lead">
+          Generate five grounded items — two MCQs, two true/false, one code analysis — then refine and
+          export for your content pipeline.
+        </p>
+        <ul className="hero__tags">
+          <li>Source-linked quotes</li>
+          <li>Human review gate</li>
+          <li>XML export</li>
+        </ul>
+      </section>
+
+      <section className={`editor-panel ${loading ? "is-loading" : ""}`}>
+        {loading && (
+          <div className="editor-panel__overlay">
+            <div className="spinner" />
+            <p>Building your question set…</p>
           </div>
         )}
-      </header>
-
-      <main className="grid-two">
-        <section className="card">
-          <h2>1. Input reading material</h2>
-          <form onSubmit={handleGenerate}>
+        <div className="editor-panel__head">
+          <h2 className="panel-title">Reading input</h2>
+          <span className="char-count">{charCount.toLocaleString()} characters</span>
+        </div>
+        <form onSubmit={handleGenerate}>
+          <div className="editor-wrap">
             <textarea
+              className="editor"
               value={markdown}
               onChange={(e) => setMarkdown(e.target.value)}
-              rows={18}
               placeholder={SAMPLE_HINT}
               required
+              disabled={loading}
+              spellCheck={false}
             />
-            <div className="row">
-              <button type="button" className="secondary" onClick={loadSample}>
-                Try load sample (dev)
-              </button>
-              <button type="submit" disabled={loading || markdown.trim().length < 50}>
-                {loading ? "Generating…" : "Run pipeline"}
-              </button>
+          </div>
+          {error && (
+            <div className="alert alert--error" role="alert">
+              {error}
             </div>
-          </form>
-          {error && <p className="error">{error}</p>}
-          {liveSteps.length > 0 && <PipelineSteps steps={liveSteps} />}
-        </section>
+          )}
+          <div className="editor-panel__actions">
+            <button type="button" className="btn btn--ghost" onClick={loadSample} disabled={loading}>
+              Load sample lesson
+            </button>
+            <button
+              type="submit"
+              className="btn btn--primary"
+              disabled={loading || markdown.trim().length < 50}
+            >
+              Generate questions
+              <span className="btn__arrow" aria-hidden>
+                →
+              </span>
+            </button>
+          </div>
+        </form>
+      </section>
 
-        <section className="card">
-          <h2>How it works</h2>
-          <ol className="steps-list">
-            <li>Parse markdown sections & code blocks</li>
-            <li>Extract teachable claims with exact quotes</li>
-            <li>Plan five slots (2 MCQ, 2 T/F, 1 code)</li>
-            <li>Draft questions only from those claims</li>
-            <li>Auto-judge + reviewer approve / edit / reject</li>
-            <li>Export tagged XML when all five are approved</li>
-          </ol>
-          <p className="muted">
-            Rule enforced: questions must be answerable from the material. Quotes are substring-checked in Node
-            before review.
-          </p>
-
-          <h3>Recent runs</h3>
-          <ul className="runs-list">
-            {recentRuns.length === 0 && <li className="muted">No runs yet</li>}
+      {recentRuns.length > 0 && (
+        <section className="recent">
+          <h2 className="section-title">Continue where you left off</h2>
+          <div className="recent__grid">
             {recentRuns.map((r) => (
-              <li key={r._id}>
-                <Link to={`/review/${r._id}`}>{r.title || "Untitled"}</Link>
-                <span className="muted"> — {r.status}</span>
-              </li>
+              <Link key={r._id} to={`/review/${r._id}`} className="recent-card">
+                <span className="recent-card__title">{r.title || "Untitled lesson"}</span>
+                <span className={`recent-card__status recent-card__status--${r.status}`}>
+                  {formatStatus(r.status)}
+                </span>
+                <span className="recent-card__chev" aria-hidden>
+                  →
+                </span>
+              </Link>
             ))}
-          </ul>
+          </div>
         </section>
-      </main>
+      )}
     </div>
   );
+}
+
+function formatStatus(status) {
+  const map = {
+    ready_for_review: "Ready to review",
+    exported: "Exported",
+    processing: "Processing",
+    failed: "Failed",
+  };
+  return map[status] || status;
 }

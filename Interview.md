@@ -14,13 +14,10 @@ Use this alongside the running app in **`README.md`**. Target recording length: 
 
 Do this in order during the recording:
 
-1. **Home** — show badges (Mongo OK, Mock vs Live LLM).
-2. Load **`sample-reading-material.md`** (button or paste).
-3. **Run pipeline** — open review page; briefly show the five pipeline steps.
-4. Pick one **ungrounded/warn** tab if any; show **supporting quote** highlighted in source.
-5. **Edit** one question (reword stem) → **Save edits** → **Approve**.
-6. Approve remaining four → **Export tagged XML** → scroll the export.
-7. Switch to **teaching** segment (below).
+1. **Home** — load sample or paste markdown → **Generate questions**.
+2. **Review** — source highlight on the left; approve, edit, or reject each of the five tabs.
+3. **Export XML** → **Download XML file**.
+4. **Teaching** segment (same material).
 
 Keep a **completed run bookmarked** (`/review/<id>`) in case the API is slow during recording.
 
